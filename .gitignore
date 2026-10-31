@@ -1,0 +1,8 @@
+**/node_modules/
+**/.env
+**/.dart_tool/
+**/.gradle/
+**/build/
+**/*.apk
+**/.idea/
+*.log
