@@ -20,4 +20,94 @@ router.get('/:id', async (req, res, next) => {
     return res.json({ task });
   } catch (err) { return next(err); }
 });
+
+router.post('/', async (req, res, next) => {
+  try {
+    const {
+      title,
+      description = '',
+      startDate,
+      dueDate,
+      priority = 'medium',
+      status = 'todo'
+    } = req.body || {};
+
+    // Kiểm tra tên công việc
+    if (
+      typeof title !== 'string' ||
+      !title.trim() ||
+      title.trim().length > 200
+    ) {
+      return res.status(400).json({
+        message: 'Tên công việc phải từ 1 đến 200 ký tự.'
+      });
+    }
+
+    // Kiểm tra mô tả
+    if (
+      typeof description !== 'string' ||
+      description.length > 5000
+    ) {
+      return res.status(400).json({
+        message: 'Mô tả công việc không hợp lệ.'
+      });
+    }
+
+    // Kiểm tra mức độ ưu tiên và trạng thái
+    if (!['low', 'medium', 'high'].includes(priority)) {
+      return res.status(400).json({
+        message: 'Mức độ ưu tiên không hợp lệ.'
+      });
+    }
+
+    if (!['todo', 'in_progress', 'completed'].includes(status)) {
+      return res.status(400).json({
+        message: 'Trạng thái công việc không hợp lệ.'
+      });
+    }
+
+    // Kiểm tra ngày bắt đầu và hạn hoàn thành
+    function parseDate(value) {
+      if (value == null || value === '') return null;
+      if (typeof value !== 'string') return undefined;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? undefined : date;
+    }
+
+    const start = parseDate(startDate);
+    const due = parseDate(dueDate);
+
+    if (start === undefined || due === undefined) {
+      return res.status(400).json({
+        message: 'Ngày bắt đầu hoặc hạn hoàn thành không hợp lệ.'
+      });
+    }
+
+    if (start && due && due < start) {
+      return res.status(400).json({
+        message: 'Hạn hoàn thành không được trước ngày bắt đầu.'
+      });
+    }
+
+    // ID người tạo lấy từ token đã xác thực
+    const createdBy = new mongoose.Types.ObjectId(req.userId);
+
+    const task = await Task.create({
+      title: title.trim(),
+      description: description.trim(),
+      createdBy,
+      priority,
+      status,
+      ...(start ? { startDate: start } : {}),
+      ...(due ? { dueDate: due } : {})
+    });
+
+    return res.status(201).json({
+      message: 'Thêm công việc thành công.',
+      task
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
 module.exports = router;

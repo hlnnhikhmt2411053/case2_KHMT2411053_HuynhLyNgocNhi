@@ -1,15 +1,16 @@
 
 import 'package:flutter/material.dart';
+
 import '../services/api_service.dart';
 import 'login_screen.dart';
 import 'task_detail_screen.dart';
+import 'task_create_screen.dart';
 
 class TaskListScreen extends StatefulWidget {
   const TaskListScreen({super.key});
 
   @override
-  State<TaskListScreen> createState() =>
-      _TaskListScreenState();
+  State<TaskListScreen> createState() => _TaskListScreenState();
 }
 
 class _TaskListScreenState extends State<TaskListScreen> {
@@ -21,11 +22,34 @@ class _TaskListScreenState extends State<TaskListScreen> {
     future = ApiService.getTasks();
   }
 
-  // Tải lại danh sách công việc
+  // Làm mới danh sách công việc
   void reload() {
     setState(() {
       future = ApiService.getTasks();
     });
+  }
+
+  // BUỔI 2: Mở màn hình thêm công việc
+  Future<void> openCreateTask() async {
+    final created = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const TaskCreateScreen(),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (created == true) {
+      reload();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Thêm công việc thành công!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
   }
 
   // Đăng xuất
@@ -43,7 +67,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  // Hiển thị trạng thái
+  // Hiển thị trạng thái công việc
   String status(String? value) {
     switch (value) {
       case 'completed':
@@ -55,7 +79,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
-  // Hiển thị độ ưu tiên
+  // Hiển thị mức độ ưu tiên
   String priority(String? value) {
     switch (value) {
       case 'high':
@@ -82,19 +106,38 @@ class _TaskListScreenState extends State<TaskListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F8FF),
+
       appBar: AppBar(
-        title: const Text('Danh sách công việc'),
+        title: const Text(
+          'Danh sách công việc',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: const Color(0xFF1769E8),
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
+            tooltip: 'Làm mới',
             onPressed: reload,
             icon: const Icon(Icons.refresh),
           ),
           IconButton(
+            tooltip: 'Đăng xuất',
             onPressed: logout,
             icon: const Icon(Icons.logout),
           ),
         ],
       ),
+
+      // BUỔI 2: Nút thêm công việc
+      floatingActionButton: FloatingActionButton(
+        onPressed: openCreateTask,
+        backgroundColor: const Color(0xFF1769E8),
+        foregroundColor: Colors.white,
+        tooltip: 'Thêm công việc',
+        child: const Icon(Icons.add),
+      ),
+
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: future,
         builder: (context, snapshot) {
@@ -133,7 +176,15 @@ class _TaskListScreenState extends State<TaskListScreen> {
           // Chưa có công việc
           if (tasks.isEmpty) {
             return const Center(
-              child: Text('Chưa có công việc nào.'),
+              child: Text(
+                'Chưa có công việc nào.\n'
+                    'Nhấn dấu + để thêm công việc mới.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey,
+                ),
+              ),
             );
           }
 
@@ -151,29 +202,44 @@ class _TaskListScreenState extends State<TaskListScreen> {
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: tasks.length,
-
               separatorBuilder: (context, index) =>
               const SizedBox(height: 10),
-
               itemBuilder: (context, index) {
                 final task = tasks[index];
 
                 return Card(
+                  color: Colors.white,
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0xFFE8F0FF),
+                      child: Icon(
+                        Icons.assignment_outlined,
+                        color: Color(0xFF1769E8),
+                      ),
+                    ),
                     title: Text(
                       '${task['title'] ?? ''}',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    subtitle: Text(
-                      '${status(task['status']?.toString())}'
-                          ' • Ưu tiên: '
-                          '${priority(task['priority']?.toString())}',
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        '${status(task['status']?.toString())}'
+                            ' • Ưu tiên: '
+                            '${priority(task['priority']?.toString())}',
+                      ),
                     ),
-                    trailing: const Icon(
-                      Icons.chevron_right,
-                    ),
+                    trailing: const Icon(Icons.chevron_right),
                     onTap: () => openTask(task),
                   ),
                 );
