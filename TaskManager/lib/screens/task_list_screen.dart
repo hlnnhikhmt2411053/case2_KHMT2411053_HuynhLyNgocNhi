@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import 'login_screen.dart';
 import 'task_detail_screen.dart';
 import 'task_create_screen.dart';
+import 'task_edit_screen.dart';
 
 class TaskListScreen extends StatefulWidget {
   const TaskListScreen({super.key});
@@ -34,7 +35,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     final created = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (context) => const TaskCreateScreen(),
+        builder: (_) => const TaskCreateScreen(),
       ),
     );
 
@@ -46,6 +47,31 @@ class _TaskListScreenState extends State<TaskListScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Thêm công việc thành công!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  // BUỔI 2: Mở màn hình sửa công việc
+  Future<void> openEditTask(Map<String, dynamic> task) async {
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TaskEditScreen(
+          id: task['_id'].toString(),
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (updated == true) {
+      reload();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cập nhật công việc thành công!'),
           backgroundColor: Colors.green,
         ),
       );
@@ -67,7 +93,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  // Hiển thị trạng thái công việc
+  // Hiển thị trạng thái
   String status(String? value) {
     switch (value) {
       case 'completed':
@@ -79,7 +105,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
-  // Hiển thị mức độ ưu tiên
+  // Hiển thị độ ưu tiên
   String priority(String? value) {
     switch (value) {
       case 'high':
@@ -111,7 +137,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
       appBar: AppBar(
         title: const Text(
           'Danh sách công việc',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
         ),
         backgroundColor: const Color(0xFF1769E8),
         foregroundColor: Colors.white,
@@ -129,7 +157,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         ],
       ),
 
-      // BUỔI 2: Nút thêm công việc
+      // Nút + Thêm công việc
       floatingActionButton: FloatingActionButton(
         onPressed: openCreateTask,
         backgroundColor: const Color(0xFF1769E8),
@@ -141,14 +169,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: future,
         builder: (context, snapshot) {
-          // Đang tải dữ liệu
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(
               child: CircularProgressIndicator(),
             );
           }
 
-          // Lỗi kết nối API
           if (snapshot.hasError) {
             return Center(
               child: Padding(
@@ -173,7 +199,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
           final tasks = snapshot.data ?? [];
 
-          // Chưa có công việc
           if (tasks.isEmpty) {
             return const Center(
               child: Text(
@@ -188,7 +213,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
             );
           }
 
-          // Danh sách công việc
           return RefreshIndicator(
             onRefresh: () async {
               final next = ApiService.getTasks();
@@ -239,7 +263,18 @@ class _TaskListScreenState extends State<TaskListScreen> {
                             '${priority(task['priority']?.toString())}',
                       ),
                     ),
-                    trailing: const Icon(Icons.chevron_right),
+
+                    // BUỔI 2: Nút sửa công việc
+                    trailing: IconButton(
+                      tooltip: 'Sửa công việc',
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        color: Color(0xFF1769E8),
+                      ),
+                      onPressed: () => openEditTask(task),
+                    ),
+
+                    // Giữ nguyên chức năng xem chi tiết
                     onTap: () => openTask(task),
                   ),
                 );

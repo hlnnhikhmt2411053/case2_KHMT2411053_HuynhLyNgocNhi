@@ -10,7 +10,7 @@ class ApiService {
 
   static const storage = FlutterSecureStorage();
 
-  // Android Emulator sử dụng 10.0.2.2 để truy cập localhost máy tính.
+  // Dia chi API
   static String get baseUrl {
     if (kIsWeb) {
       return 'http://localhost:3000/api';
@@ -23,17 +23,17 @@ class ApiService {
     return 'http://localhost:3000/api';
   }
 
-  // Lấy token
+  // Lay token
   static Future<String?> getToken() {
     return storage.read(key: 'token');
   }
 
-  // Đăng xuất
+  // Dang xuat
   static Future<void> logout() {
     return storage.delete(key: 'token');
   }
 
-  // Hàm gửi yêu cầu API
+  // Gui yeu cau API
   static Future<Map<String, dynamic>> _send(
       String method,
       String path, {
@@ -56,7 +56,6 @@ class ApiService {
 
     try {
       final uri = Uri.parse('$baseUrl$path');
-
       late http.Response response;
 
       if (method == 'GET') {
@@ -66,6 +65,14 @@ class ApiService {
       } else if (method == 'POST') {
         response = await http
             .post(
+          uri,
+          headers: headers,
+          body: jsonEncode(data ?? {}),
+        )
+            .timeout(const Duration(seconds: 15));
+      } else if (method == 'PUT') {
+        response = await http
+            .put(
           uri,
           headers: headers,
           body: jsonEncode(data ?? {}),
@@ -86,8 +93,7 @@ class ApiService {
       if (response.statusCode < 200 ||
           response.statusCode >= 300) {
         throw Exception(
-          (body['message'] ?? 'Lỗi ${response.statusCode}')
-              .toString(),
+          (body['message'] ?? 'Lỗi ${response.statusCode}').toString(),
         );
       }
 
@@ -97,9 +103,9 @@ class ApiService {
     }
   }
 
-  // ==============================
-  // BUỔI 1: ĐĂNG KÝ
-  // ==============================
+  // ===========================
+  // BUOI 1: DANG KY
+  // ===========================
   static Future<void> register(
       String fullName,
       String email,
@@ -121,9 +127,9 @@ class ApiService {
     );
   }
 
-  // ==============================
-  // BUỔI 1: ĐĂNG NHẬP
-  // ==============================
+  // ===========================
+  // BUOI 1: DANG NHAP
+  // ===========================
   static Future<void> login(
       String email,
       String password,
@@ -143,9 +149,9 @@ class ApiService {
     );
   }
 
-  // ==============================
-  // BUỔI 1: DANH SÁCH CÔNG VIỆC
-  // ==============================
+  // ===========================
+  // BUOI 1: DANH SACH CONG VIEC
+  // ===========================
   static Future<List<Map<String, dynamic>>> getTasks() async {
     final result = await _send(
       'GET',
@@ -156,15 +162,13 @@ class ApiService {
     final list = result['tasks'] as List<dynamic>? ?? [];
 
     return list
-        .map(
-          (e) => Map<String, dynamic>.from(e as Map),
-    )
+        .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
   }
 
-  // ==============================
-  // BUỔI 1: CHI TIẾT CÔNG VIỆC
-  // ==============================
+  // ===========================
+  // BUOI 1: CHI TIET CONG VIEC
+  // ===========================
   static Future<Map<String, dynamic>> getTask(String id) async {
     final result = await _send(
       'GET',
@@ -177,9 +181,9 @@ class ApiService {
     );
   }
 
-  // ==============================
-  // BUỔI 2: THÊM CÔNG VIỆC
-  // ==============================
+  // ===========================
+  // BUOI 2: THEM CONG VIEC
+  // ===========================
   static Future<Map<String, dynamic>> createTask({
     required String title,
     String description = '',
@@ -201,6 +205,37 @@ class ApiService {
           'startDate': startDate.toIso8601String(),
         if (dueDate != null)
           'dueDate': dueDate.toIso8601String(),
+      },
+    );
+
+    return Map<String, dynamic>.from(
+      result['task'] as Map,
+    );
+  }
+
+  // ===========================
+  // BUOI 2: SUA CONG VIEC
+  // ===========================
+  static Future<Map<String, dynamic>> updateTask({
+    required String id,
+    required String title,
+    required String description,
+    required String priority,
+    required String status,
+    DateTime? startDate,
+    DateTime? dueDate,
+  }) async {
+    final result = await _send(
+      'PUT',
+      '/tasks/${Uri.encodeComponent(id)}',
+      auth: true,
+      data: {
+        'title': title.trim(),
+        'description': description.trim(),
+        'priority': priority,
+        'status': status,
+        'startDate': startDate?.toIso8601String(),
+        'dueDate': dueDate?.toIso8601String(),
       },
     );
 

@@ -110,4 +110,127 @@ router.post('/', async (req, res, next) => {
     return next(err);
   }
 });
+
+//// BUỔI 2: SỬA CÔNG VIỆC
+router.put('/:id', async (req, res, next) => {
+  try {
+    const taskId = req.params.id;
+
+    if (!mongoose.isValidObjectId(taskId)) {
+      return res.status(400).json({
+        message: 'ID công việc không hợp lệ.'
+      });
+    }
+
+    const task = await Task.findById(taskId);
+
+    if (!task) {
+      return res.status(404).json({
+        message: 'Không tìm thấy công việc.'
+      });
+    }
+
+    // Giai đoạn này chỉ người tạo được sửa công việc.
+    if (task.createdBy.toString() !== req.userId.toString()) {
+      return res.status(403).json({
+        message: 'Bạn không có quyền sửa công việc này.'
+      });
+    }
+
+    const data = req.body || {};
+    const updates = {};
+
+    if (Object.hasOwn(data, 'title')) {
+      if (
+        typeof data.title !== 'string' ||
+        !data.title.trim() ||
+        data.title.trim().length > 200
+      ) {
+        return res.status(400).json({
+          message: 'Tên công việc phải từ 1 đến 200 ký tự.'
+        });
+      }
+
+      updates.title = data.title.trim();
+    }
+
+    if (Object.hasOwn(data, 'description')) {
+      if (
+        typeof data.description !== 'string' ||
+        data.description.length > 5000
+      ) {
+        return res.status(400).json({
+          message: 'Mô tả công việc không hợp lệ.'
+        });
+      }
+
+      updates.description = data.description.trim();
+    }
+
+    if (Object.hasOwn(data, 'priority')) {
+      if (!['low', 'medium', 'high'].includes(data.priority)) {
+        return res.status(400).json({
+          message: 'Mức độ ưu tiên không hợp lệ.'
+        });
+      }
+
+      updates.priority = data.priority;
+    }
+
+    if (Object.hasOwn(data, 'status')) {
+      if (!['todo', 'in_progress', 'completed'].includes(data.status)) {
+        return res.status(400).json({
+          message: 'Trạng thái không hợp lệ.'
+        });
+      }
+
+      updates.status = data.status;
+    }
+
+    for (const field of ['startDate', 'dueDate']) {
+      if (Object.hasOwn(data, field)) {
+        const value = data[field];
+
+        if (value === null || value === '') {
+          updates[field] = null;
+        } else if (
+          typeof value === 'string' &&
+          /^\d{4}-\d{2}-\d{2}(T.*)?$/.test(value) &&
+          !Number.isNaN(Date.parse(value))
+        ) {
+          updates[field] = new Date(value);
+        } else {
+          return res.status(400).json({
+            message: `${field} không hợp lệ.`
+          });
+        }
+      }
+    }
+
+    const start = Object.hasOwn(updates, 'startDate')
+      ? updates.startDate
+      : task.startDate;
+
+    const due = Object.hasOwn(updates, 'dueDate')
+      ? updates.dueDate
+      : task.dueDate;
+
+    if (start && due && due < start) {
+      return res.status(400).json({
+        message: 'Hạn hoàn thành không được trước ngày bắt đầu.'
+      });
+    }
+
+    Object.assign(task, updates);
+    await task.save();
+
+    return res.json({
+      message: 'Cập nhật công việc thành công.',
+      task
+    });
+
+  } catch (err) {
+    return next(err);
+  }
+});
 module.exports = router;
