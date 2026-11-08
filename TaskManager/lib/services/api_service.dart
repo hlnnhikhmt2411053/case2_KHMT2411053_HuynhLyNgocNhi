@@ -10,7 +10,7 @@ class ApiService {
 
   static const storage = FlutterSecureStorage();
 
-  // Dia chi API
+  // DIA CHI API
   static String get baseUrl {
     if (kIsWeb) {
       return 'http://localhost:3000/api';
@@ -23,17 +23,17 @@ class ApiService {
     return 'http://localhost:3000/api';
   }
 
-  // Lay token
+  // LAY TOKEN DANG NHAP
   static Future<String?> getToken() {
     return storage.read(key: 'token');
   }
 
-  // Dang xuat
+  // DANG XUAT
   static Future<void> logout() {
     return storage.delete(key: 'token');
   }
 
-  // Gui yeu cau API
+  // HAM GUI YEU CAU API
   static Future<Map<String, dynamic>> _send(
       String method,
       String path, {
@@ -47,7 +47,7 @@ class ApiService {
     if (auth) {
       final token = await getToken();
 
-      if (token == null) {
+      if (token == null || token.isEmpty) {
         throw Exception('Vui lòng đăng nhập lại.');
       }
 
@@ -62,6 +62,7 @@ class ApiService {
         response = await http
             .get(uri, headers: headers)
             .timeout(const Duration(seconds: 15));
+
       } else if (method == 'POST') {
         response = await http
             .post(
@@ -70,6 +71,7 @@ class ApiService {
           body: jsonEncode(data ?? {}),
         )
             .timeout(const Duration(seconds: 15));
+
       } else if (method == 'PUT') {
         response = await http
             .put(
@@ -78,6 +80,16 @@ class ApiService {
           body: jsonEncode(data ?? {}),
         )
             .timeout(const Duration(seconds: 15));
+
+      } else if (method == 'DELETE') {
+        // BUOI 2: HO TRO XOA CONG VIEC
+        response = await http
+            .delete(
+          uri,
+          headers: headers,
+        )
+            .timeout(const Duration(seconds: 15));
+
       } else {
         throw Exception('Phương thức API không được hỗ trợ.');
       }
@@ -93,7 +105,8 @@ class ApiService {
       if (response.statusCode < 200 ||
           response.statusCode >= 300) {
         throw Exception(
-          (body['message'] ?? 'Lỗi ${response.statusCode}').toString(),
+          (body['message'] ?? 'Lỗi ${response.statusCode}')
+              .toString(),
         );
       }
 
@@ -162,7 +175,9 @@ class ApiService {
     final list = result['tasks'] as List<dynamic>? ?? [];
 
     return list
-        .map((e) => Map<String, dynamic>.from(e as Map))
+        .map(
+          (e) => Map<String, dynamic>.from(e as Map),
+    )
         .toList();
   }
 
@@ -241,6 +256,17 @@ class ApiService {
 
     return Map<String, dynamic>.from(
       result['task'] as Map,
+    );
+  }
+
+  // ===========================
+  // BUOI 2: XOA CONG VIEC
+  // ===========================
+  static Future<void> deleteTask(String id) async {
+    await _send(
+      'DELETE',
+      '/tasks/${Uri.encodeComponent(id)}',
+      auth: true,
     );
   }
 }

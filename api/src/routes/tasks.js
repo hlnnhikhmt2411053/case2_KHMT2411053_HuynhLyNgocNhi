@@ -233,4 +233,47 @@ router.put('/:id', async (req, res, next) => {
     return next(err);
   }
 });
+
+//// BUỔI 2: XÓA CÔNG VIỆC
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const taskId = req.params.id;
+
+    // Kiểm tra ID công việc
+    if (!mongoose.isValidObjectId(taskId)) {
+      return res.status(400).json({
+        message: 'ID công việc không hợp lệ.'
+      });
+    }
+
+    // Tìm công việc trong MongoDB
+    const task = await Task.findById(taskId);
+
+    if (!task) {
+      return res.status(404).json({
+        message: 'Không tìm thấy công việc.'
+      });
+    }
+
+    // Chỉ người tạo công việc mới được xóa
+    if (task.createdBy.toString() !== req.userId.toString()) {
+      return res.status(403).json({
+        message: 'Bạn không có quyền xóa công việc này.'
+      });
+    }
+
+    // Xóa công việc
+    await Task.deleteOne({
+      _id: taskId,
+      createdBy: req.userId
+    });
+
+    return res.json({
+      message: 'Xóa công việc thành công.'
+    });
+
+  } catch (err) {
+    return next(err);
+  }
+});
 module.exports = router;

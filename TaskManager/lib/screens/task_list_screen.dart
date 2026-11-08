@@ -16,6 +16,7 @@ class TaskListScreen extends StatefulWidget {
 
 class _TaskListScreenState extends State<TaskListScreen> {
   late Future<List<Map<String, dynamic>>> future;
+  String? _deletingTaskId;
 
   @override
   void initState() {
@@ -23,14 +24,14 @@ class _TaskListScreenState extends State<TaskListScreen> {
     future = ApiService.getTasks();
   }
 
-  // Làm mới danh sách công việc
+  // LAM MOI DANH SACH
   void reload() {
     setState(() {
       future = ApiService.getTasks();
     });
   }
 
-  // BUỔI 2: Mở màn hình thêm công việc
+  // BUOI 2: THEM CONG VIEC
   Future<void> openCreateTask() async {
     final created = await Navigator.push<bool>(
       context,
@@ -47,14 +48,15 @@ class _TaskListScreenState extends State<TaskListScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Thêm công việc thành công!'),
-          backgroundColor: Colors.green,
         ),
       );
     }
   }
 
-  // BUỔI 2: Mở màn hình sửa công việc
-  Future<void> openEditTask(Map<String, dynamic> task) async {
+  // BUOI 2: SUA CONG VIEC
+  Future<void> openEditTask(
+      Map<String, dynamic> task,
+      ) async {
     final updated = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -72,13 +74,89 @@ class _TaskListScreenState extends State<TaskListScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Cập nhật công việc thành công!'),
-          backgroundColor: Colors.green,
         ),
       );
     }
   }
 
-  // Đăng xuất
+  // BUOI 2: XOA CONG VIEC
+  Future<void> deleteTask(
+      Map<String, dynamic> task,
+      ) async {
+    if (_deletingTaskId != null) return;
+
+    final id = task['_id'].toString();
+    final title = (task['title'] ?? 'công việc này').toString();
+
+    // HOP THOAI XAC NHAN
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Xác nhận xóa'),
+          content: Text(
+            'Bạn có chắc muốn xóa công việc "$title" không?\n\n'
+                'Hành động này không thể hoàn tác.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
+              },
+              child: const Text('Hủy'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, true);
+              },
+              child: const Text(
+                'Xóa',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || confirmed != true) return;
+
+    setState(() {
+      _deletingTaskId = id;
+    });
+
+    try {
+      // GOI API DELETE
+      await ApiService.deleteTask(id);
+
+      if (!mounted) return;
+
+      // TAI LAI DANH SACH
+      reload();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Xóa công việc thành công!'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Không thể xóa công việc: $e'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _deletingTaskId = null;
+        });
+      }
+    }
+  }
+
+  // DANG XUAT
   Future<void> logout() async {
     await ApiService.logout();
 
@@ -93,7 +171,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  // Hiển thị trạng thái
+  // TEN TRANG THAI
   String status(String? value) {
     switch (value) {
       case 'completed':
@@ -105,7 +183,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
-  // Hiển thị độ ưu tiên
+  // TEN MUC DO UU TIEN
   String priority(String? value) {
     switch (value) {
       case 'high':
@@ -117,9 +195,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
-  // Mở chi tiết công việc
-  void openTask(Map<String, dynamic> task) {
-    Navigator.push(
+  // XEM CHI TIET CONG VIEC
+  Future<void> openTask(
+      Map<String, dynamic> task,
+      ) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => TaskDetailScreen(
@@ -127,6 +207,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
         ),
       ),
     );
+
+    if (!mounted) return;
+    reload();
   }
 
   @override
@@ -157,7 +240,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         ],
       ),
 
-      // Nút + Thêm công việc
+      // NUT THEM CONG VIEC
       floatingActionButton: FloatingActionButton(
         onPressed: openCreateTask,
         backgroundColor: const Color(0xFF1769E8),
@@ -223,13 +306,19 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
               await next;
             },
+
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: tasks.length,
-              separatorBuilder: (context, index) =>
-              const SizedBox(height: 10),
+
+              separatorBuilder: (context, index) {
+                return const SizedBox(height: 10);
+              },
+
               itemBuilder: (context, index) {
                 final task = tasks[index];
+                final taskId = task['_id'].toString();
+                final isDeleting = _deletingTaskId == taskId;
 
                 return Card(
                   color: Colors.white,
@@ -237,11 +326,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
+
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
+                      horizontal: 12,
                       vertical: 8,
                     ),
+
                     leading: const CircleAvatar(
                       backgroundColor: Color(0xFFE8F0FF),
                       child: Icon(
@@ -249,12 +340,14 @@ class _TaskListScreenState extends State<TaskListScreen> {
                         color: Color(0xFF1769E8),
                       ),
                     ),
+
                     title: Text(
                       '${task['title'] ?? ''}',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+
                     subtitle: Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
@@ -264,17 +357,42 @@ class _TaskListScreenState extends State<TaskListScreen> {
                       ),
                     ),
 
-                    // BUỔI 2: Nút sửa công việc
-                    trailing: IconButton(
-                      tooltip: 'Sửa công việc',
-                      icon: const Icon(
-                        Icons.edit_outlined,
-                        color: Color(0xFF1769E8),
-                      ),
-                      onPressed: () => openEditTask(task),
+                    // NUT SUA VA XOA
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Sửa công việc',
+                          onPressed: _deletingTaskId != null
+                              ? null
+                              : () => openEditTask(task),
+                          icon: const Icon(
+                            Icons.edit_outlined,
+                            color: Color(0xFF1769E8),
+                          ),
+                        ),
+
+                        IconButton(
+                          tooltip: 'Xóa công việc',
+                          onPressed: _deletingTaskId != null
+                              ? null
+                              : () => deleteTask(task),
+                          icon: isDeleting
+                              ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                              : const Icon(
+                            Icons.delete_outline,
+                            color: Colors.red,
+                          ),
+                        ),
+                      ],
                     ),
 
-                    // Giữ nguyên chức năng xem chi tiết
                     onTap: () => openTask(task),
                   ),
                 );
