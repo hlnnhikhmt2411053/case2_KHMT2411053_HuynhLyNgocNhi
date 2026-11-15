@@ -1,6 +1,5 @@
-
 import 'package:flutter/material.dart';
-
+import 'task_assign_screen.dart';
 import '../services/api_service.dart';
 import 'login_screen.dart';
 import 'task_detail_screen.dart';
@@ -153,6 +152,30 @@ class _TaskListScreenState extends State<TaskListScreen> {
           _deletingTaskId = null;
         });
       }
+    }
+  }
+
+  // BUOI 2: GIAO CONG VIEC
+  Future<void> openAssignTask(Map<String, dynamic> task) async {
+    if (_deletingTaskId != null) return;
+
+    final assigned = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TaskAssignScreen(
+          taskId: task['_id'].toString(),
+          taskTitle: (task['title'] ?? '').toString(),
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (assigned == true) {
+      reload();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Giao công việc thành công!')),
+      );
     }
   }
 
@@ -319,6 +342,16 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 final task = tasks[index];
                 final taskId = task['_id'].toString();
                 final isDeleting = _deletingTaskId == taskId;
+                final isOwner = task['isOwner'] == true;
+                // API danh sách đã populate email người được giao.
+                final rawAssignees = task['assigneeIds'];
+                final assignees = rawAssignees is List
+                    ? rawAssignees.whereType<Map>().toList()
+                    : <Map>[];
+                final primary = task['primaryAssigneeId'];
+                final primaryId = primary is Map
+                    ? primary['_id']?.toString()
+                    : primary?.toString();
 
                 return Card(
                   color: Colors.white,
@@ -350,47 +383,119 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
                     subtitle: Padding(
                       padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        '${status(task['status']?.toString())}'
-                            ' • Ưu tiên: '
-                            '${priority(task['priority']?.toString())}',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${status(task['status']?.toString())}'
+                                ' • Ưu tiên: '
+                                '${priority(task['priority']?.toString())}',
+                          ),
+                          if (assignees.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.group_outlined,
+                                    size: 16, color: Color(0xFF1769E8)),
+                                const SizedBox(width: 5),
+                                Flexible(
+                                  child: Text(
+                                    'Người được giao (${assignees.length})',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1769E8),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            for (final user in assignees)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 3),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (user['_id']?.toString() == primaryId)
+                                      const Padding(
+                                        padding: EdgeInsets.only(right: 4),
+                                        child: Icon(Icons.star,
+                                            size: 14, color: Colors.amber),
+                                      ),
+                                    Expanded(
+                                      child: Text(
+                                        (user['email'] ?? '').toString(),
+                                        style: const TextStyle(fontSize: 12),
+                                        softWrap: true,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ],
                       ),
                     ),
 
-                    // NUT SUA VA XOA
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: 'Sửa công việc',
-                          onPressed: _deletingTaskId != null
-                              ? null
-                              : () => openEditTask(task),
-                          icon: const Icon(
-                            Icons.edit_outlined,
-                            color: Color(0xFF1769E8),
+                    // MENU GIAO VIEC, SUA, XOA (khong tran man hinh)
+                    trailing: isOwner
+                        ? PopupMenuButton<String>(
+                      tooltip: 'Tùy chọn công việc',
+                      enabled: _deletingTaskId == null,
+                      icon: isDeleting
+                          ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                          : const Icon(Icons.more_vert),
+                      onSelected: (value) {
+                        if (value == 'assign') {
+                          openAssignTask(task);
+                        } else if (value == 'edit') {
+                          openEditTask(task);
+                        } else if (value == 'delete') {
+                          deleteTask(task);
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: 'assign',
+                          child: Row(
+                            children: [
+                              Icon(Icons.group_add_outlined),
+                              SizedBox(width: 12),
+                              Text('Giao công việc'),
+                            ],
                           ),
                         ),
-
-                        IconButton(
-                          tooltip: 'Xóa công việc',
-                          onPressed: _deletingTaskId != null
-                              ? null
-                              : () => deleteTask(task),
-                          icon: isDeleting
-                              ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
-                          )
-                              : const Icon(
-                            Icons.delete_outline,
-                            color: Colors.red,
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_outlined),
+                              SizedBox(width: 12),
+                              Text('Sửa công việc'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline, color: Colors.red),
+                              SizedBox(width: 12),
+                              Text('Xóa công việc'),
+                            ],
                           ),
                         ),
                       ],
+                    )
+                        : const Icon(
+                      Icons.visibility_outlined,
+                      color: Colors.grey,
                     ),
 
                     onTap: () => openTask(task),

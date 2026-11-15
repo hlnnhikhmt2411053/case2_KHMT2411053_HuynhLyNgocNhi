@@ -82,12 +82,8 @@ class ApiService {
             .timeout(const Duration(seconds: 15));
 
       } else if (method == 'DELETE') {
-        // BUOI 2: HO TRO XOA CONG VIEC
         response = await http
-            .delete(
-          uri,
-          headers: headers,
-        )
+            .delete(uri, headers: headers)
             .timeout(const Duration(seconds: 15));
 
       } else {
@@ -175,9 +171,7 @@ class ApiService {
     final list = result['tasks'] as List<dynamic>? ?? [];
 
     return list
-        .map(
-          (e) => Map<String, dynamic>.from(e as Map),
-    )
+        .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
   }
 
@@ -266,6 +260,38 @@ class ApiService {
     await _send(
       'DELETE',
       '/tasks/${Uri.encodeComponent(id)}',
+      auth: true,
+    );
+  }
+
+  // ===========================
+  // BUOI 2: GIAO CONG VIEC
+  // ===========================
+  static Future<Map<String, dynamic>> assignTask({
+    required String taskId,
+    required List<String> emails,
+    String? primaryEmail,
+  }) async {
+    final result = await _send(
+      'POST',
+      '/tasks/${Uri.encodeComponent(taskId)}/assignees',
+      auth: true,
+      data: {
+        'emails': emails,
+        'primaryEmail': primaryEmail,
+      },
+    );
+
+    return result;
+  }
+
+  // BUỔI 2: LẤY DANH SÁCH NGƯỜI ĐƯỢC GIAO CÔNG VIỆC
+  static Future<Map<String, dynamic>> getTaskAssignees({
+    required String taskId,
+  }) async {
+    return _send(
+      'GET',
+      '/tasks/${Uri.encodeComponent(taskId)}/assignees',
       auth: true,
     );
   }
