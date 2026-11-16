@@ -81,6 +81,49 @@ class _TaskAssignScreenState extends State<TaskAssignScreen> {
     }
   }
 
+  // Tim tai khoan theo ten/email ngay tren giao dien giao viec (yeu cau de).
+  Future<void> _searchUser() async {
+    final q = _emailController.text.trim();
+    if (q.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nhap it nhat 2 ky tu de tim ten/email.')),
+      );
+      return;
+    }
+    try {
+      final users = await ApiService.searchUsers(q);
+      if (!mounted) return;
+      final selected = await showModalBottomSheet<String>(
+        context: context,
+        isScrollControlled: true,
+        builder: (bottomContext) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Text('Chon tai khoan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              if (users.isEmpty) const Padding(
+                padding: EdgeInsets.all(16), child: Text('Khong tim thay tai khoan phu hop.'),
+              ),
+              ...users.take(15).map((user) => ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: Text('${user['fullName'] ?? ''}'),
+                subtitle: Text('${user['email'] ?? ''}'),
+                onTap: () => Navigator.pop(bottomContext, '${user['email'] ?? ''}'),
+              )),
+            ]),
+          ),
+        ),
+      );
+      if (!mounted || selected == null || selected.isEmpty) return;
+      _emailController.text = selected;
+      _addEmail();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Loi tim tai khoan: $e')));
+    }
+  }
+
   void _addEmail() {
     if (_loading || _saving) return;
     final email = _emailController.text.trim().toLowerCase();
@@ -180,195 +223,201 @@ class _TaskAssignScreenState extends State<TaskAssignScreen> {
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : _loadError != null
-            ? Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error_outline,
-                    color: Colors.red, size: 48),
-                const SizedBox(height: 12),
-                const Text('Không tải được danh sách người nhận.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text(_loadError!, textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: _loadAssignees,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Thử lại'),
-                ),
-              ],
-            ),
-          ),
-        )
-            : ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            const Text(
-              'Công việc cần giao',
-              style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            Card(
-              color: Colors.white,
-              child: ListTile(
-                leading: const Icon(
-                  Icons.assignment_outlined,
-                  color: Color(0xFF1769E8),
-                ),
-                title: Text(widget.taskTitle),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Thêm người nhận bằng email',
-              style: TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _emailController,
-              enabled: !_saving,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => _addEmail(),
-              decoration: const InputDecoration(
-                labelText: 'Email người nhận',
-                hintText: 'email@example.com',
-                prefixIcon: Icon(Icons.email_outlined),
-                border: OutlineInputBorder(),
-                filled: true,
-                fillColor: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: _saving ? null : _addEmail,
-              icon: const Icon(Icons.person_add_alt_1),
-              label: const Text('Thêm người nhận'),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Danh sách người nhận (${_emails.length})',
-              style: const TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            if (_emails.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'Chưa có người nhận nào.',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
-            for (final email in _emails)
-              Card(
-                color: Colors.white,
-                child: ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0xFFE8F0FF),
-                    child: Icon(
-                      Icons.person_outline,
-                      color: Color(0xFF1769E8),
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.error_outline,
+                              color: Colors.red, size: 48),
+                          const SizedBox(height: 12),
+                          const Text('Không tải được danh sách người nhận.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          Text(_loadError!, textAlign: TextAlign.center),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _loadAssignees,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Thử lại'),
+                          ),
+                        ],
+                      ),
                     ),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.all(20),
+                    children: [
+                      const Text(
+                        'Công việc cần giao',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 10),
+                      Card(
+                        color: Colors.white,
+                        child: ListTile(
+                          leading: const Icon(
+                            Icons.assignment_outlined,
+                            color: Color(0xFF1769E8),
+                          ),
+                          title: Text(widget.taskTitle),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Thêm người nhận theo tên hoặc email',
+                        style: TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _emailController,
+                        enabled: !_saving,
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _addEmail(),
+                        decoration: const InputDecoration(
+                          labelText: 'Email người nhận',
+                          hintText: 'email@example.com',
+                          prefixIcon: Icon(Icons.email_outlined),
+                          border: OutlineInputBorder(),
+                          filled: true,
+                          fillColor: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: _saving ? null : _searchUser,
+                        icon: const Icon(Icons.person_search_outlined),
+                        label: const Text('Tìm tài khoản theo tên / email'),
+                      ),
+                      const SizedBox(height: 6),
+                      OutlinedButton.icon(
+                        onPressed: _saving ? null : _addEmail,
+                        icon: const Icon(Icons.person_add_alt_1),
+                        label: const Text('Thêm người nhận'),
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Danh sách người nhận (${_emails.length})',
+                        style: const TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 12),
+                      if (_emails.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text(
+                            'Chưa có người nhận nào.',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                      for (final email in _emails)
+                        Card(
+                          color: Colors.white,
+                          child: ListTile(
+                            leading: const CircleAvatar(
+                              backgroundColor: Color(0xFFE8F0FF),
+                              child: Icon(
+                                Icons.person_outline,
+                                color: Color(0xFF1769E8),
+                              ),
+                            ),
+                            title: Text(
+                              email,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              _primaryEmail == email
+                                  ? 'Người phụ trách chính'
+                                  : 'Người được giao',
+                            ),
+                            trailing: IconButton(
+                              tooltip: 'Bỏ người nhận',
+                              onPressed: _saving
+                                  ? null
+                                  : () => _removeEmail(email),
+                              icon: const Icon(Icons.close, color: Colors.red),
+                            ),
+                          ),
+                        ),
+                      if (_emails.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        const Text(
+                          'Người phụ trách chính',
+                          style: TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          key: ValueKey(_primaryEmail),
+                          initialValue: _primaryEmail,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.star_outline),
+                            border: OutlineInputBorder(),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          items: _emails.map((email) {
+                            return DropdownMenuItem<String>(
+                              value: email,
+                              child: Text(
+                                email,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: _saving
+                              ? null
+                              : (value) {
+                                  setState(() => _primaryEmail = value);
+                                },
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Lưu ý: Người nhận phải có tài khoản '
+                        'đã đăng ký trong hệ thống.',
+                        style: TextStyle(fontSize: 13, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton.icon(
+                          onPressed: _saving ? null : _saveAssignment,
+                          icon: _saving
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.send_outlined),
+                          label: Text(
+                            _saving
+                                ? 'Đang giao công việc...'
+                                : 'Giao công việc',
+                            style: const TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1769E8),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  title: Text(
-                    email,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    _primaryEmail == email
-                        ? 'Người phụ trách chính'
-                        : 'Người được giao',
-                  ),
-                  trailing: IconButton(
-                    tooltip: 'Bỏ người nhận',
-                    onPressed: _saving
-                        ? null
-                        : () => _removeEmail(email),
-                    icon: const Icon(Icons.close, color: Colors.red),
-                  ),
-                ),
-              ),
-            if (_emails.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              const Text(
-                'Người phụ trách chính',
-                style: TextStyle(
-                    fontSize: 17, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                key: ValueKey(_primaryEmail),
-                initialValue: _primaryEmail,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.star_outline),
-                  border: OutlineInputBorder(),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-                items: _emails.map((email) {
-                  return DropdownMenuItem<String>(
-                    value: email,
-                    child: Text(
-                      email,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  );
-                }).toList(),
-                onChanged: _saving
-                    ? null
-                    : (value) {
-                  setState(() => _primaryEmail = value);
-                },
-              ),
-            ],
-            const SizedBox(height: 24),
-            const Text(
-              'Lưu ý: Người nhận phải có tài khoản '
-                  'đã đăng ký trong hệ thống.',
-              style: TextStyle(fontSize: 13, color: Colors.grey),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                onPressed: _saving ? null : _saveAssignment,
-                icon: _saving
-                    ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-                    : const Icon(Icons.send_outlined),
-                label: Text(
-                  _saving
-                      ? 'Đang giao công việc...'
-                      : 'Giao công việc',
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1769E8),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

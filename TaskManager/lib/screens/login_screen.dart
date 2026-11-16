@@ -17,15 +17,25 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void dispose() { email.dispose(); password.dispose(); super.dispose(); }
   Future<void> submit() async {
-    if (!formKey.currentState!.validate() || busy) return;
+    if (!formKey.currentState!.validate() || busy) {
+      return;
+    }
     setState(() => busy = true);
     try {
       await ApiService.login(email.text, password.text);
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const TaskListScreen()), (_) => false);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
-    } finally { if (mounted) setState(() => busy = false); }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => busy = false);
+      }
+    }
   }
   @override
   Widget build(BuildContext context) => Scaffold(

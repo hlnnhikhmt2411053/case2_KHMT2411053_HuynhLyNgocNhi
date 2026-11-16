@@ -17,15 +17,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void dispose() { name.dispose(); email.dispose(); password.dispose(); confirm.dispose(); super.dispose(); }
   Future<void> submit() async {
-    if (!keyForm.currentState!.validate() || busy) return;
+    if (!keyForm.currentState!.validate() || busy) {
+      return;
+    }
     setState(() => busy = true);
     try {
       await ApiService.register(name.text, email.text, password.text);
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const TaskListScreen()), (_) => false);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
-    } finally { if (mounted) setState(() => busy = false); }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => busy = false);
+      }
+    }
   }
   @override
   Widget build(BuildContext context) => Scaffold(

@@ -1,298 +1,206 @@
-
 import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
   ApiService._();
+  static const _storage = FlutterSecureStorage();
 
-  static const storage = FlutterSecureStorage();
-
-  // DIA CHI API
+  // Android Emulator truy cập máy Windows qua 10.0.2.2.
   static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:3000/api';
-    }
-
+    if (kIsWeb) return 'http://localhost:3000/api';
     if (defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:3000/api';
     }
-
     return 'http://localhost:3000/api';
   }
 
-  // LAY TOKEN DANG NHAP
-  static Future<String?> getToken() {
-    return storage.read(key: 'token');
-  }
+  static Future<String?> getToken() => _storage.read(key: 'token');
+  static Future<void> logout() => _storage.delete(key: 'token');
 
-  // DANG XUAT
-  static Future<void> logout() {
-    return storage.delete(key: 'token');
-  }
-
-  // HAM GUI YEU CAU API
   static Future<Map<String, dynamic>> _send(
-      String method,
-      String path, {
-        Map<String, dynamic>? data,
-        bool auth = false,
-      }) async {
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
-
+    String method, String path, {
+    Map<String, dynamic>? data,
+    bool auth = false,
+    Map<String, String>? query,
+  }) async {
+    final headers = <String, String>{'Content-Type': 'application/json'};
     if (auth) {
       final token = await getToken();
-
       if (token == null || token.isEmpty) {
         throw Exception('Vui lòng đăng nhập lại.');
       }
-
       headers['Authorization'] = 'Bearer $token';
     }
-
+    final base = Uri.parse('$baseUrl$path');
+    final uri = query == null || query.isEmpty
+        ? base : base.replace(queryParameters: query);
     try {
-      final uri = Uri.parse('$baseUrl$path');
       late http.Response response;
-
-      if (method == 'GET') {
-        response = await http
-            .get(uri, headers: headers)
-            .timeout(const Duration(seconds: 15));
-
-      } else if (method == 'POST') {
-        response = await http
-            .post(
-          uri,
-          headers: headers,
-          body: jsonEncode(data ?? {}),
-        )
-            .timeout(const Duration(seconds: 15));
-
-      } else if (method == 'PUT') {
-        response = await http
-            .put(
-          uri,
-          headers: headers,
-          body: jsonEncode(data ?? {}),
-        )
-            .timeout(const Duration(seconds: 15));
-
-      } else if (method == 'DELETE') {
-        response = await http
-            .delete(uri, headers: headers)
-            .timeout(const Duration(seconds: 15));
-
-      } else {
-        throw Exception('Phương thức API không được hỗ trợ.');
+      switch (method) {
+        case 'GET':
+          response = await http.get(uri, headers: headers)
+              .timeout(const Duration(seconds: 20));
+          break;
+        case 'POST':
+          response = await http.post(uri, headers: headers,
+              body: jsonEncode(data ?? {})).timeout(const Duration(seconds: 20));
+          break;
+        case 'PUT':
+          response = await http.put(uri, headers: headers,
+              body: jsonEncode(data ?? {})).timeout(const Duration(seconds: 20));
+          break;
+        case 'PATCH':
+          response = await http.patch(uri, headers: headers,
+              body: jsonEncode(data ?? {})).timeout(const Duration(seconds: 20));
+          break;
+        case 'DELETE':
+          response = await http.delete(uri, headers: headers)
+              .timeout(const Duration(seconds: 20));
+          break;
+        default:
+          throw Exception('Phương thức API không được hỗ trợ.');
       }
-
-      final body = jsonDecode(
-        utf8.decode(response.bodyBytes),
-      );
-
-      if (body is! Map<String, dynamic>) {
-        throw Exception('Dữ liệu API không hợp lệ.');
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is! Map<String, dynamic>) {
+        throw Exception('Phản hồi API không hợp lệ.');
       }
-
-      if (response.statusCode < 200 ||
-          response.statusCode >= 300) {
-        throw Exception(
-          (body['message'] ?? 'Lỗi ${response.statusCode}')
-              .toString(),
-        );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception((decoded['message'] ?? 'Lỗi ${response.statusCode}').toString());
       }
-
-      return body;
+      return decoded;
     } on FormatException {
-      throw Exception('Phản hồi API không hợp lệ.');
+      throw Exception('Phản hồi API không đúng định dạng JSON.');
     }
   }
 
-  // ===========================
-  // BUOI 1: DANG KY
-  // ===========================
-  static Future<void> register(
-      String fullName,
-      String email,
-      String password,
-      ) async {
-    final result = await _send(
-      'POST',
-      '/auth/register',
-      data: {
-        'fullName': fullName,
-        'email': email,
-        'password': password,
-      },
-    );
-
-    await storage.write(
-      key: 'token',
-      value: result['token'] as String,
-    );
+  static Future<void> register(String fullName, String email, String password) async {
+    final r = await _send('POST', '/auth/register', data: {
+      'fullName': fullName, 'email': email.trim().toLowerCase(), 'password': password,
+    });
+    await _storage.write(key: 'token', value: r['token'] as String);
+  }
+  static Future<void> login(String email, String password) async {
+    final r = await _send('POST', '/auth/login', data: {
+      'email': email.trim().toLowerCase(), 'password': password,
+    });
+    await _storage.write(key: 'token', value: r['token'] as String);
+  }
+  static Future<Map<String, dynamic>> getMe() async {
+    final r = await _send('GET', '/auth/me', auth: true);
+    return Map<String, dynamic>.from(r['user'] as Map);
+  }
+  static Future<Map<String, dynamic>> updateMe(String fullName) async {
+    final r = await _send('PUT', '/auth/me', auth: true, data: { 'fullName': fullName });
+    return Map<String, dynamic>.from(r['user'] as Map);
+  }
+  static Future<void> changePassword(String oldPassword, String newPassword) async {
+    await _send('PUT', '/auth/change-password', auth: true, data: {
+      'oldPassword': oldPassword, 'newPassword': newPassword,
+    });
+  }
+  static Future<List<Map<String, dynamic>>> searchUsers(String q) async {
+    final r = await _send('GET', '/users/search', auth: true, query: {'q': q});
+    return (r['users'] as List? ?? []).map((x) => Map<String, dynamic>.from(x as Map)).toList();
   }
 
-  // ===========================
-  // BUOI 1: DANG NHAP
-  // ===========================
-  static Future<void> login(
-      String email,
-      String password,
-      ) async {
-    final result = await _send(
-      'POST',
-      '/auth/login',
-      data: {
-        'email': email,
-        'password': password,
-      },
-    );
-
-    await storage.write(
-      key: 'token',
-      value: result['token'] as String,
-    );
+  static Future<List<Map<String, dynamic>>> getTasks({
+    String q = '', String status = '', String priority = '',
+    String scope = 'all', String sortBy = 'createdAt', String order = 'desc',
+    String assigneeId = '',
+  }) async {
+    final r = await _send('GET', '/tasks', auth: true, query: {
+      if (q.trim().isNotEmpty) 'q': q.trim(),
+      if (status.isNotEmpty) 'status': status,
+      if (priority.isNotEmpty) 'priority': priority,
+      if (assigneeId.isNotEmpty) 'assignee': assigneeId,
+      'scope': scope, 'sortBy': sortBy, 'order': order,
+    });
+    return (r['tasks'] as List? ?? [])
+        .map((x) => Map<String, dynamic>.from(x as Map)).toList();
   }
-
-  // ===========================
-  // BUOI 1: DANH SACH CONG VIEC
-  // ===========================
-  static Future<List<Map<String, dynamic>>> getTasks() async {
-    final result = await _send(
-      'GET',
-      '/tasks',
-      auth: true,
-    );
-
-    final list = result['tasks'] as List<dynamic>? ?? [];
-
-    return list
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-  }
-
-  // ===========================
-  // BUOI 1: CHI TIET CONG VIEC
-  // ===========================
   static Future<Map<String, dynamic>> getTask(String id) async {
-    final result = await _send(
-      'GET',
-      '/tasks/${Uri.encodeComponent(id)}',
-      auth: true,
-    );
-
-    return Map<String, dynamic>.from(
-      result['task'] as Map,
-    );
+    final r = await _send('GET', '/tasks/${Uri.encodeComponent(id)}', auth: true);
+    return Map<String, dynamic>.from(r['task'] as Map);
   }
-
-  // ===========================
-  // BUOI 2: THEM CONG VIEC
-  // ===========================
   static Future<Map<String, dynamic>> createTask({
-    required String title,
-    String description = '',
-    String priority = 'medium',
-    String status = 'todo',
-    DateTime? startDate,
-    DateTime? dueDate,
+    required String title, String description = '', String priority = 'medium',
+    String status = 'todo', DateTime? startDate, DateTime? dueDate,
   }) async {
-    final result = await _send(
-      'POST',
-      '/tasks',
-      auth: true,
-      data: {
-        'title': title.trim(),
-        'description': description.trim(),
-        'priority': priority,
-        'status': status,
-        if (startDate != null)
-          'startDate': startDate.toIso8601String(),
-        if (dueDate != null)
-          'dueDate': dueDate.toIso8601String(),
-      },
-    );
-
-    return Map<String, dynamic>.from(
-      result['task'] as Map,
-    );
+    final r = await _send('POST', '/tasks', auth: true, data: {
+      'title': title.trim(), 'description': description.trim(),
+      'priority': priority, 'status': status,
+      'startDate': startDate?.toIso8601String(),
+      'dueDate': dueDate?.toIso8601String(),
+    });
+    return Map<String, dynamic>.from(r['task'] as Map);
   }
-
-  // ===========================
-  // BUOI 2: SUA CONG VIEC
-  // ===========================
   static Future<Map<String, dynamic>> updateTask({
-    required String id,
-    required String title,
-    required String description,
-    required String priority,
-    required String status,
-    DateTime? startDate,
-    DateTime? dueDate,
+    required String id, required String title, required String description,
+    required String priority, required String status,
+    DateTime? startDate, DateTime? dueDate,
   }) async {
-    final result = await _send(
-      'PUT',
-      '/tasks/${Uri.encodeComponent(id)}',
-      auth: true,
-      data: {
-        'title': title.trim(),
-        'description': description.trim(),
-        'priority': priority,
-        'status': status,
-        'startDate': startDate?.toIso8601String(),
-        'dueDate': dueDate?.toIso8601String(),
-      },
-    );
-
-    return Map<String, dynamic>.from(
-      result['task'] as Map,
-    );
+    final r = await _send('PUT', '/tasks/${Uri.encodeComponent(id)}', auth: true, data: {
+      'title': title.trim(), 'description': description.trim(),
+      'priority': priority, 'status': status,
+      'startDate': startDate?.toIso8601String(),
+      'dueDate': dueDate?.toIso8601String(),
+    });
+    return Map<String, dynamic>.from(r['task'] as Map);
   }
-
-  // ===========================
-  // BUOI 2: XOA CONG VIEC
-  // ===========================
   static Future<void> deleteTask(String id) async {
-    await _send(
-      'DELETE',
-      '/tasks/${Uri.encodeComponent(id)}',
-      auth: true,
-    );
+    await _send('DELETE', '/tasks/${Uri.encodeComponent(id)}', auth: true);
   }
+  static Future<Map<String, dynamic>> updateTaskStatus(String id, String status) =>
+      _send('PATCH', '/tasks/${Uri.encodeComponent(id)}/status', auth: true,
+          data: {'status': status});
 
-  // ===========================
-  // BUOI 2: GIAO CONG VIEC
-  // ===========================
   static Future<Map<String, dynamic>> assignTask({
-    required String taskId,
-    required List<String> emails,
-    String? primaryEmail,
-  }) async {
-    final result = await _send(
-      'POST',
-      '/tasks/${Uri.encodeComponent(taskId)}/assignees',
-      auth: true,
-      data: {
-        'emails': emails,
-        'primaryEmail': primaryEmail,
-      },
-    );
-
-    return result;
+    required String taskId, required List<String> emails, String? primaryEmail,
+  }) => _send('POST', '/tasks/${Uri.encodeComponent(taskId)}/assignees',
+      auth: true, data: {'emails': emails, 'primaryEmail': primaryEmail});
+  static Future<Map<String, dynamic>> getTaskAssignees({required String taskId}) =>
+      _send('GET', '/tasks/${Uri.encodeComponent(taskId)}/assignees', auth: true);
+  static Future<void> removeAssignee(String taskId, String userId) async {
+    await _send('DELETE', '/tasks/${Uri.encodeComponent(taskId)}/assignees/${Uri.encodeComponent(userId)}', auth: true);
   }
 
-  // BUỔI 2: LẤY DANH SÁCH NGƯỜI ĐƯỢC GIAO CÔNG VIỆC
-  static Future<Map<String, dynamic>> getTaskAssignees({
-    required String taskId,
-  }) async {
-    return _send(
-      'GET',
-      '/tasks/${Uri.encodeComponent(taskId)}/assignees',
-      auth: true,
-    );
+  static Future<Map<String, dynamic>> shareTask({
+    required String taskId, required String email, required String permission,
+  }) => _send('POST', '/tasks/${Uri.encodeComponent(taskId)}/shares',
+      auth: true, data: {'email': email.trim().toLowerCase(), 'permission': permission});
+
+  static Future<Map<String, dynamic>> shareTaskMultiple({
+    required String taskId, required List<String> emails, required String permission,
+  }) => _send('POST', '/tasks/${Uri.encodeComponent(taskId)}/shares',
+      auth: true, data: {'emails': emails.map((x) => x.trim().toLowerCase()).toList(),
+        'permission': permission});
+  static Future<Map<String, dynamic>> getTaskShares({required String taskId}) =>
+      _send('GET', '/tasks/${Uri.encodeComponent(taskId)}/shares', auth: true);
+  static Future<Map<String, dynamic>> revokeTaskShare({
+    required String taskId, required String shareId,
+  }) => _send('DELETE', '/tasks/${Uri.encodeComponent(taskId)}/shares/${Uri.encodeComponent(shareId)}', auth: true);
+  static Future<void> updateSharePermission(String taskId, String shareId, String permission) async {
+    await _send('PATCH', '/tasks/${Uri.encodeComponent(taskId)}/shares/${Uri.encodeComponent(shareId)}',
+        auth: true, data: {'permission': permission});
+  }
+
+  static Future<Map<String, dynamic>> getNotifications() =>
+      _send('GET', '/notifications', auth: true);
+  static Future<Map<String, dynamic>> markNotificationRead(String id) =>
+      _send('PUT', '/notifications/${Uri.encodeComponent(id)}/read', auth: true);
+  static Future<void> markAllNotificationsRead() async {
+    await _send('PATCH', '/notifications/read-all', auth: true);
+  }
+  static Future<Map<String, dynamic>> getStatistics(String category) =>
+      _send('GET', '/statistics/$category', auth: true);
+  static Future<List<Map<String, dynamic>>> getTaskActivities(String id) async {
+    final r = await _send('GET', '/tasks/${Uri.encodeComponent(id)}/activities', auth: true);
+    return (r['activities'] as List? ?? []).map((x) => Map<String, dynamic>.from(x as Map)).toList();
+  }
+  static Future<List<Map<String, dynamic>>> getTaskEmailLogs(String id) async {
+    final r = await _send('GET', '/tasks/${Uri.encodeComponent(id)}/email-logs', auth: true);
+    return (r['logs'] as List? ?? []).map((x) => Map<String, dynamic>.from(x as Map)).toList();
   }
 }

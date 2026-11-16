@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'task_assign_screen.dart';
+import 'task_share_screen.dart';
 import '../services/api_service.dart';
 import 'login_screen.dart';
 import 'task_detail_screen.dart';
 import 'task_create_screen.dart';
 import 'task_edit_screen.dart';
+import 'task_notifications_screen.dart';
+import 'profile_screen.dart';
+import 'statistics_screen.dart';
+import 'task_filter_screen.dart';
 
 class TaskListScreen extends StatefulWidget {
   const TaskListScreen({super.key});
@@ -16,18 +21,52 @@ class TaskListScreen extends StatefulWidget {
 class _TaskListScreenState extends State<TaskListScreen> {
   late Future<List<Map<String, dynamic>>> future;
   String? _deletingTaskId;
+  int _unreadCount = 0;
+  String _query = '';
+  String _statusFilter = '';
+  String _priorityFilter = '';
+  String _scopeFilter = 'all';
+  String _sortFilter = 'createdAt';
+  String _assigneeEmail = '';
+  String _assigneeId = '';
+
+  Future<List<Map<String, dynamic>>> _fetchTasks() => ApiService.getTasks(
+        q: _query,
+        status: _statusFilter,
+        priority: _priorityFilter,
+        scope: _scopeFilter,
+        sortBy: _sortFilter,
+        assigneeId: _assigneeId,
+      );
 
   @override
   void initState() {
     super.initState();
-    future = ApiService.getTasks();
+    future = _fetchTasks();
+    _loadUnreadCount();
+  }
+
+  // BUOI 3: CAP NHAT SO THONG BAO CHUA DOC
+  Future<void> _loadUnreadCount() async {
+    try {
+      final response = await ApiService.getNotifications();
+      final rawCount = response['unreadCount'];
+      final count = rawCount is num ? rawCount.toInt() : 0;
+      if (!mounted) return;
+      setState(() {
+        _unreadCount = count < 0 ? 0 : count;
+      });
+    } catch (_) {
+      // Khong lam anh huong danh sach cong viec neu API thong bao loi.
+    }
   }
 
   // LAM MOI DANH SACH
   void reload() {
     setState(() {
-      future = ApiService.getTasks();
+      future = _fetchTasks();
     });
+    _loadUnreadCount();
   }
 
   // BUOI 2: THEM CONG VIEC
@@ -54,8 +93,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   // BUOI 2: SUA CONG VIEC
   Future<void> openEditTask(
-      Map<String, dynamic> task,
-      ) async {
+    Map<String, dynamic> task,
+  ) async {
     final updated = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -80,8 +119,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   // BUOI 2: XOA CONG VIEC
   Future<void> deleteTask(
-      Map<String, dynamic> task,
-      ) async {
+    Map<String, dynamic> task,
+  ) async {
     if (_deletingTaskId != null) return;
 
     final id = task['_id'].toString();
@@ -95,7 +134,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
           title: const Text('Xác nhận xóa'),
           content: Text(
             'Bạn có chắc muốn xóa công việc "$title" không?\n\n'
-                'Hành động này không thể hoàn tác.',
+            'Hành động này không thể hoàn tác.',
           ),
           actions: [
             TextButton(
@@ -179,6 +218,78 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
+  // BUOI 2: CHIA SE CONG VIEC
+  Future<void> openShareTask(Map<String, dynamic> task) async {
+    if (_deletingTaskId != null) return;
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TaskShareScreen(
+          taskId: task['_id'].toString(),
+          taskTitle: (task['title'] ?? '').toString(),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    reload();
+  }
+
+  // BUOI 3: MO MAN HINH THONG BAO
+  Future<void> openNotifications() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const TaskNotificationsScreen(),
+      ),
+    );
+
+    if (!mounted) return;
+    reload();
+  }
+
+  // BUOI 3: MO MAN HINH TIM KIEM, LOC VA SAP XEP RIENG.
+  // Khong giu TextEditingController trong dialog, tranh loi widget lifecycle.
+  Future<void> openFilters() async {
+    final filter = await Navigator.push<TaskFilterResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TaskFilterScreen(
+          initial: TaskFilterResult(
+            query: _query,
+            assigneeEmail: _assigneeEmail,
+            assigneeId: _assigneeId,
+            status: _statusFilter,
+            priority: _priorityFilter,
+            scope: _scopeFilter,
+            sortBy: _sortFilter,
+          ),
+        ),
+      ),
+    );
+
+    if (!mounted || filter == null) return;
+    setState(() {
+      _query = filter.query;
+      _assigneeEmail = filter.assigneeEmail;
+      _assigneeId = filter.assigneeId;
+      _statusFilter = filter.status;
+      _priorityFilter = filter.priority;
+      _scopeFilter = filter.scope;
+      _sortFilter = filter.sortBy;
+    });
+    reload();
+  }
+
+  void openStatistics() {
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const StatisticsScreen()));
+  }
+
+  void openProfile() {
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+  }
+
   // DANG XUAT
   Future<void> logout() async {
     await ApiService.logout();
@@ -190,7 +301,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       MaterialPageRoute(
         builder: (_) => const LoginScreen(),
       ),
-          (_) => false,
+      (_) => false,
     );
   }
 
@@ -220,8 +331,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   // XEM CHI TIET CONG VIEC
   Future<void> openTask(
-      Map<String, dynamic> task,
-      ) async {
+    Map<String, dynamic> task,
+  ) async {
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -250,15 +361,37 @@ class _TaskListScreenState extends State<TaskListScreen> {
         backgroundColor: const Color(0xFF1769E8),
         foregroundColor: Colors.white,
         actions: [
+          // BUOI 3: CHUONG THONG BAO
           IconButton(
-            tooltip: 'Làm mới',
-            onPressed: reload,
-            icon: const Icon(Icons.refresh),
+            tooltip: 'Thông báo',
+            onPressed: openNotifications,
+            icon: Badge(
+              isLabelVisible: _unreadCount > 0,
+              label: Text(_unreadCount > 99 ? '99+' : '$_unreadCount'),
+              child: const Icon(Icons.notifications_outlined),
+            ),
           ),
+
           IconButton(
-            tooltip: 'Đăng xuất',
-            onPressed: logout,
-            icon: const Icon(Icons.logout),
+            tooltip: 'Tìm kiếm và lọc',
+            onPressed: openFilters,
+            icon: const Icon(Icons.tune),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Công cụ',
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              if (value == 'stats') openStatistics();
+              if (value == 'profile') openProfile();
+              if (value == 'refresh') reload();
+              if (value == 'logout') logout();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'stats', child: Text('Thống kê')),
+              PopupMenuItem(value: 'profile', child: Text('Tài khoản')),
+              PopupMenuItem(value: 'refresh', child: Text('Làm mới')),
+              PopupMenuItem(value: 'logout', child: Text('Đăng xuất')),
+            ],
           ),
         ],
       ),
@@ -309,7 +442,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
             return const Center(
               child: Text(
                 'Chưa có công việc nào.\n'
-                    'Nhấn dấu + để thêm công việc mới.',
+                'Nhấn dấu + để thêm công việc mới.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 16,
@@ -321,28 +454,34 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
           return RefreshIndicator(
             onRefresh: () async {
-              final next = ApiService.getTasks();
+              final next = _fetchTasks();
 
               setState(() {
                 future = next;
               });
 
+              await _loadUnreadCount();
               await next;
             },
-
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: tasks.length,
-
               separatorBuilder: (context, index) {
                 return const SizedBox(height: 10);
               },
-
               itemBuilder: (context, index) {
                 final task = tasks[index];
                 final taskId = task['_id'].toString();
                 final isDeleting = _deletingTaskId == taskId;
                 final isOwner = task['isOwner'] == true;
+                final canEdit = task['canEdit'] == true || isOwner;
+                final role = switch ('${task['role'] ?? ''}') {
+                  'owner' => 'Người tạo',
+                  'primary' => 'Người phụ trách chính',
+                  'assignee' => 'Người được giao',
+                  'shared' => 'Người được chia sẻ',
+                  _ => 'Người có quyền truy cập',
+                };
                 // API danh sách đã populate email người được giao.
                 final rawAssignees = task['assigneeIds'];
                 final assignees = rawAssignees is List
@@ -359,7 +498,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -389,9 +527,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
                         children: [
                           Text(
                             '${status(task['status']?.toString())}'
-                                ' • Ưu tiên: '
-                                '${priority(task['priority']?.toString())}',
+                            ' • Ưu tiên: '
+                            '${priority(task['priority']?.toString())}',
                           ),
+                          const SizedBox(height: 4),
+                          Text('Vai trò: $role',
+                              style: const TextStyle(
+                                  fontSize: 12, color: Color(0xFF1769E8))),
                           if (assignees.isNotEmpty) ...[
                             const SizedBox(height: 10),
                             Row(
@@ -439,64 +581,74 @@ class _TaskListScreenState extends State<TaskListScreen> {
                       ),
                     ),
 
-                    // MENU GIAO VIEC, SUA, XOA (khong tran man hinh)
-                    trailing: isOwner
+                    // Chủ công việc: Giao, Chia sẻ, Sửa, Xóa.
+                    // Người được chia sẻ quyền edit: chỉ được Sửa.
+                    // Người chỉ có quyền xem: biểu tượng mắt.
+                    trailing: isOwner || canEdit
                         ? PopupMenuButton<String>(
-                      tooltip: 'Tùy chọn công việc',
-                      enabled: _deletingTaskId == null,
-                      icon: isDeleting
-                          ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                          : const Icon(Icons.more_vert),
-                      onSelected: (value) {
-                        if (value == 'assign') {
-                          openAssignTask(task);
-                        } else if (value == 'edit') {
-                          openEditTask(task);
-                        } else if (value == 'delete') {
-                          deleteTask(task);
-                        }
-                      },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(
-                          value: 'assign',
-                          child: Row(
-                            children: [
-                              Icon(Icons.group_add_outlined),
-                              SizedBox(width: 12),
-                              Text('Giao công việc'),
+                            tooltip: 'Tùy chọn công việc',
+                            enabled: _deletingTaskId == null,
+                            icon: isDeleting
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.more_vert),
+                            onSelected: (value) {
+                              if (value == 'assign' && isOwner) {
+                                openAssignTask(task);
+                              } else if (value == 'share' && isOwner) {
+                                openShareTask(task);
+                              } else if (value == 'edit' && canEdit) {
+                                openEditTask(task);
+                              } else if (value == 'delete' && isOwner) {
+                                deleteTask(task);
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              if (isOwner) ...[
+                                const PopupMenuItem<String>(
+                                  value: 'assign',
+                                  child: ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: Icon(Icons.group_add_outlined),
+                                    title: Text('Giao công việc'),
+                                  ),
+                                ),
+                                const PopupMenuItem<String>(
+                                  value: 'share',
+                                  child: ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: Icon(Icons.share_outlined),
+                                    title: Text('Chia sẻ công việc'),
+                                  ),
+                                ),
+                              ],
+                              if (canEdit)
+                                const PopupMenuItem<String>(
+                                  value: 'edit',
+                                  child: ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: Icon(Icons.edit_outlined),
+                                    title: Text('Sửa công việc'),
+                                  ),
+                                ),
+                              if (isOwner)
+                                const PopupMenuItem<String>(
+                                  value: 'delete',
+                                  child: ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: Icon(Icons.delete_outline,
+                                        color: Colors.red),
+                                    title: Text('Xóa công việc'),
+                                  ),
+                                ),
                             ],
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: 'edit',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit_outlined),
-                              SizedBox(width: 12),
-                              Text('Sửa công việc'),
-                            ],
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete_outline, color: Colors.red),
-                              SizedBox(width: 12),
-                              Text('Xóa công việc'),
-                            ],
-                          ),
-                        ),
-                      ],
-                    )
-                        : const Icon(
-                      Icons.visibility_outlined,
-                      color: Colors.grey,
-                    ),
+                          )
+                        : const Icon(Icons.visibility_outlined,
+                            color: Colors.grey),
 
                     onTap: () => openTask(task),
                   ),
